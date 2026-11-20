@@ -157,7 +157,7 @@ impl YggdrasilClient {
 
         let response = match &self.config.endpoint {
             AdminEndpoint::Tcp(address) => {
-                let mut stream = connect_tcp(address, self.config.timeout)?;
+                let stream = connect_tcp(address, self.config.timeout)?;
                 stream
                     .set_read_timeout(Some(self.config.timeout))
                     .map_err(|error| {
@@ -172,7 +172,7 @@ impl YggdrasilClient {
             }
             #[cfg(unix)]
             AdminEndpoint::Unix(path) => {
-                let mut stream =
+                let stream =
                     std::os::unix::net::UnixStream::connect(path).map_err(|error| {
                         AdapterError::new(format!(
                             "connect to Yggdrasil Unix Admin socket {}: {error}",
@@ -534,7 +534,7 @@ mod tests {
         assert_eq!(snapshot.routes.len(), 1);
         assert_eq!(
             snapshot.routes[0].endpoint.address,
-            "200:1::2".parse::<Ipv6Addr>().unwrap().into()
+            std::net::IpAddr::V6("200:1::2".parse::<Ipv6Addr>().unwrap())
         );
         assert_eq!(snapshot.routes[0].state, RouteState::Routed);
         assert_eq!(
