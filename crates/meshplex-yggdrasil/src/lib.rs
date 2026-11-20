@@ -61,7 +61,9 @@ impl AdminEndpoint {
             #[cfg(unix)]
             {
                 if path.is_empty() {
-                    return Err(AdapterError::new("Yggdrasil Unix admin socket path is empty"));
+                    return Err(AdapterError::new(
+                        "Yggdrasil Unix admin socket path is empty",
+                    ));
                 }
                 return Ok(Self::Unix(PathBuf::from(path)));
             }
@@ -170,12 +172,13 @@ impl YggdrasilClient {
             }
             #[cfg(unix)]
             AdminEndpoint::Unix(path) => {
-                let mut stream = std::os::unix::net::UnixStream::connect(path).map_err(|error| {
-                    AdapterError::new(format!(
-                        "connect to Yggdrasil Unix Admin socket {}: {error}",
-                        path.display()
-                    ))
-                })?;
+                let mut stream =
+                    std::os::unix::net::UnixStream::connect(path).map_err(|error| {
+                        AdapterError::new(format!(
+                            "connect to Yggdrasil Unix Admin socket {}: {error}",
+                            path.display()
+                        ))
+                    })?;
                 stream
                     .set_read_timeout(Some(self.config.timeout))
                     .map_err(|error| {
@@ -199,7 +202,9 @@ impl YggdrasilClient {
 
 fn connect_tcp(address: &str, timeout: Duration) -> Result<TcpStream, AdapterError> {
     let addresses = address.to_socket_addrs().map_err(|error| {
-        AdapterError::new(format!("resolve Yggdrasil Admin address {address}: {error}"))
+        AdapterError::new(format!(
+            "resolve Yggdrasil Admin address {address}: {error}"
+        ))
     })?;
 
     let mut last_error = None;
@@ -522,12 +527,7 @@ mod tests {
             ]
         });
 
-        let snapshot = build_snapshot(
-            &self_info("200:1::1"),
-            &peers,
-            Backend::Go,
-        )
-        .unwrap();
+        let snapshot = build_snapshot(&self_info("200:1::1"), &peers, Backend::Go).unwrap();
 
         assert_eq!(snapshot.connected_peers, Some(1));
         assert_eq!(snapshot.known_routes, 1);
@@ -554,12 +554,7 @@ mod tests {
             ]
         });
 
-        let snapshot = build_snapshot(
-            &self_info("200:1::1"),
-            &peers,
-            Backend::RustNg,
-        )
-        .unwrap();
+        let snapshot = build_snapshot(&self_info("200:1::1"), &peers, Backend::RustNg).unwrap();
 
         assert_eq!(
             snapshot.routes[0].metrics.round_trip_time,
