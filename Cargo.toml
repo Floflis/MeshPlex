@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = ["crates/meshplex-core"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+repository = "https://github.com/Floflis/MeshiPlexer"
