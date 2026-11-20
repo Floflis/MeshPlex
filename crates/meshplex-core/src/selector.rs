@@ -133,6 +133,13 @@ mod tests {
         ServiceId,
     };
 
+    struct Sample {
+        latency_ms: Option<u64>,
+        packet_loss_ppm: Option<u32>,
+        throughput_bps: Option<u64>,
+        observed_at: Option<SystemTime>,
+    }
+
     fn service_id(key: &[u8]) -> ServiceId {
         ServiceId::from_public_key(key).unwrap()
     }
@@ -142,10 +149,7 @@ mod tests {
         network: OverlayId,
         last_segment: u16,
         state: RouteState,
-        latency_ms: Option<u64>,
-        packet_loss_ppm: Option<u32>,
-        throughput_bps: Option<u64>,
-        observed_at: Option<SystemTime>,
+        sample: Sample,
     ) -> RouteCandidate {
         RouteCandidate {
             service_id: service,
@@ -156,13 +160,27 @@ mod tests {
             },
             state,
             metrics: RouteMetrics {
-                round_trip_time: latency_ms.map(Duration::from_millis),
+                round_trip_time: sample.latency_ms.map(Duration::from_millis),
                 jitter: None,
-                packet_loss_ppm,
-                throughput_bps,
+                packet_loss_ppm: sample.packet_loss_ppm,
+                throughput_bps: sample.throughput_bps,
                 path_quality: None,
-                observed_at,
+                observed_at: sample.observed_at,
             },
+        }
+    }
+
+    fn sample(
+        latency_ms: Option<u64>,
+        packet_loss_ppm: Option<u32>,
+        throughput_bps: Option<u64>,
+        observed_at: Option<SystemTime>,
+    ) -> Sample {
+        Sample {
+            latency_ms,
+            packet_loss_ppm,
+            throughput_bps,
+            observed_at,
         }
     }
 
@@ -176,20 +194,14 @@ mod tests {
                 OverlayId::Yggdrasil,
                 2,
                 RouteState::Reachable,
-                Some(40),
-                Some(1_000),
-                Some(10_000),
-                Some(now),
+                sample(Some(40), Some(1_000), Some(10_000), Some(now)),
             ),
             candidate(
                 service,
                 OverlayId::Cjdns,
                 1,
                 RouteState::Reachable,
-                Some(20),
-                Some(2_000),
-                Some(8_000),
-                Some(now),
+                sample(Some(20), Some(2_000), Some(8_000), Some(now)),
             ),
         ];
 
@@ -209,10 +221,7 @@ mod tests {
             OverlayId::Cjdns,
             1,
             RouteState::Reachable,
-            Some(1),
-            Some(0),
-            Some(1_000_000),
-            Some(now),
+            sample(Some(1), Some(0), Some(1_000_000), Some(now)),
         );
 
         assert!(
@@ -231,10 +240,12 @@ mod tests {
             OverlayId::Cjdns,
             1,
             RouteState::Reachable,
-            Some(1),
-            Some(0),
-            Some(1_000_000),
-            Some(now - Duration::from_secs(31)),
+            sample(
+                Some(1),
+                Some(0),
+                Some(1_000_000),
+                Some(now - Duration::from_secs(31)),
+            ),
         );
 
         assert!(
@@ -253,10 +264,12 @@ mod tests {
             OverlayId::Cjdns,
             1,
             RouteState::Reachable,
-            Some(1),
-            Some(0),
-            Some(1_000_000),
-            Some(now + Duration::from_secs(1)),
+            sample(
+                Some(1),
+                Some(0),
+                Some(1_000_000),
+                Some(now + Duration::from_secs(1)),
+            ),
         );
 
         assert!(
@@ -275,10 +288,7 @@ mod tests {
             OverlayId::Cjdns,
             1,
             RouteState::Reachable,
-            Some(1),
-            Some(0),
-            Some(1_000_000),
-            None,
+            sample(Some(1), Some(0), Some(1_000_000), None),
         );
 
         assert!(
@@ -298,20 +308,14 @@ mod tests {
                 OverlayId::Cjdns,
                 1,
                 RouteState::Routed,
-                Some(1),
-                Some(0),
-                Some(1_000_000),
-                Some(now),
+                sample(Some(1), Some(0), Some(1_000_000), Some(now)),
             ),
             candidate(
                 service,
                 OverlayId::Yggdrasil,
                 2,
                 RouteState::Reachable,
-                Some(100),
-                Some(10_000),
-                Some(100_000),
-                Some(now),
+                sample(Some(100), Some(10_000), Some(100_000), Some(now)),
             ),
         ];
 
@@ -330,10 +334,7 @@ mod tests {
             OverlayId::Cjdns,
             1,
             RouteState::Reachable,
-            Some(1),
-            Some(1_000_001),
-            Some(1_000_000),
-            Some(now),
+            sample(Some(1), Some(1_000_001), Some(1_000_000), Some(now)),
         );
 
         assert!(
