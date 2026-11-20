@@ -172,13 +172,12 @@ impl YggdrasilClient {
             }
             #[cfg(unix)]
             AdminEndpoint::Unix(path) => {
-                let stream =
-                    std::os::unix::net::UnixStream::connect(path).map_err(|error| {
-                        AdapterError::new(format!(
-                            "connect to Yggdrasil Unix Admin socket {}: {error}",
-                            path.display()
-                        ))
-                    })?;
+                let stream = std::os::unix::net::UnixStream::connect(path).map_err(|error| {
+                    AdapterError::new(format!(
+                        "connect to Yggdrasil Unix Admin socket {}: {error}",
+                        path.display()
+                    ))
+                })?;
                 stream
                     .set_read_timeout(Some(self.config.timeout))
                     .map_err(|error| {
