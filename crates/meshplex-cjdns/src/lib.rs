@@ -74,9 +74,9 @@ impl CjdnsAdapter {
             .map_err(|error| AdapterError::new(format!("send CJDNS Admin request: {error}")))?;
 
         let mut response = vec![0_u8; MAX_UDP_PAYLOAD];
-        let length = socket.recv(&mut response).map_err(|error| {
-            AdapterError::new(format!("receive CJDNS Admin response: {error}"))
-        })?;
+        let length = socket
+            .recv(&mut response)
+            .map_err(|error| AdapterError::new(format!("receive CJDNS Admin response: {error}")))?;
         response.truncate(length);
 
         decode_bencode(&response).map_err(|error| {
@@ -86,7 +86,9 @@ impl CjdnsAdapter {
 
     fn collect_routes(&self) -> Result<Vec<OverlayRoute>, AdapterError> {
         if self.config.max_pages == 0 {
-            return Err(AdapterError::new("CJDNS max_pages must be greater than zero"));
+            return Err(AdapterError::new(
+                "CJDNS max_pages must be greater than zero",
+            ));
         }
 
         let mut routes = Vec::new();
@@ -233,10 +235,7 @@ impl BValue {
 }
 
 fn decode_bencode(input: &[u8]) -> Result<BValue, String> {
-    let mut decoder = BDecoder {
-        input,
-        cursor: 0,
-    };
+    let mut decoder = BDecoder { input, cursor: 0 };
     let value = decoder.parse_value(0)?;
     if decoder.cursor != input.len() {
         return Err("trailing bytes after bencode value".to_string());
