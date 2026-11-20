@@ -114,9 +114,7 @@ mod tests {
         RouteCandidate {
             endpoint: OverlayEndpoint {
                 network,
-                address: IpAddr::V6(Ipv6Addr::new(
-                    0x200, 0, 0, 0, 0, 0, 0, last_segment,
-                )),
+                address: IpAddr::V6(Ipv6Addr::new(0x200, 0, 0, 0, 0, 0, 0, last_segment)),
                 port: Some(443),
             },
             state,
@@ -132,20 +130,51 @@ mod tests {
     #[test]
     fn lowest_latency_selects_the_fastest_eligible_path() {
         let candidates = [
-            candidate(OverlayId::Yggdrasil, 2, RouteState::Reachable, Some(40), Some(1_000), Some(10_000)),
-            candidate(OverlayId::Cjdns, 1, RouteState::Reachable, Some(20), Some(2_000), Some(8_000)),
+            candidate(
+                OverlayId::Yggdrasil,
+                2,
+                RouteState::Reachable,
+                Some(40),
+                Some(1_000),
+                Some(10_000),
+            ),
+            candidate(
+                OverlayId::Cjdns,
+                1,
+                RouteState::Reachable,
+                Some(20),
+                Some(2_000),
+                Some(8_000),
+            ),
         ];
 
         let selected = SelectionPolicy::LowestLatency.select(&candidates).unwrap();
         assert_eq!(selected.endpoint.network, OverlayId::Cjdns);
-        assert_eq!(selected.metrics.round_trip_time, Some(Duration::from_millis(20)));
+        assert_eq!(
+            selected.metrics.round_trip_time,
+            Some(Duration::from_millis(20))
+        );
     }
 
     #[test]
     fn unknown_and_unreachable_paths_are_excluded() {
         let candidates = [
-            candidate(OverlayId::Cjdns, 1, RouteState::Unreachable, Some(1), Some(0), Some(1_000_000)),
-            candidate(OverlayId::Yggdrasil, 2, RouteState::Unknown, Some(2), Some(0), Some(1_000_000)),
+            candidate(
+                OverlayId::Cjdns,
+                1,
+                RouteState::Unreachable,
+                Some(1),
+                Some(0),
+                Some(1_000_000),
+            ),
+            candidate(
+                OverlayId::Yggdrasil,
+                2,
+                RouteState::Unknown,
+                Some(2),
+                Some(0),
+                Some(1_000_000),
+            ),
         ];
 
         assert!(SelectionPolicy::LowestLatency.select(&candidates).is_none());
@@ -154,8 +183,22 @@ mod tests {
     #[test]
     fn reachable_path_ranks_before_degraded_even_when_slower() {
         let candidates = [
-            candidate(OverlayId::Cjdns, 1, RouteState::Degraded, Some(1), Some(0), Some(1_000_000)),
-            candidate(OverlayId::Yggdrasil, 2, RouteState::Reachable, Some(100), Some(10_000), Some(100_000)),
+            candidate(
+                OverlayId::Cjdns,
+                1,
+                RouteState::Degraded,
+                Some(1),
+                Some(0),
+                Some(1_000_000),
+            ),
+            candidate(
+                OverlayId::Yggdrasil,
+                2,
+                RouteState::Reachable,
+                Some(100),
+                Some(10_000),
+                Some(100_000),
+            ),
         ];
 
         let selected = SelectionPolicy::LowestLatency.select(&candidates).unwrap();
@@ -165,19 +208,49 @@ mod tests {
     #[test]
     fn highest_throughput_prefers_the_largest_known_measurement() {
         let candidates = [
-            candidate(OverlayId::Cjdns, 1, RouteState::Reachable, Some(10), Some(0), Some(100)),
-            candidate(OverlayId::Yggdrasil, 2, RouteState::Reachable, Some(50), Some(0), Some(900)),
+            candidate(
+                OverlayId::Cjdns,
+                1,
+                RouteState::Reachable,
+                Some(10),
+                Some(0),
+                Some(100),
+            ),
+            candidate(
+                OverlayId::Yggdrasil,
+                2,
+                RouteState::Reachable,
+                Some(50),
+                Some(0),
+                Some(900),
+            ),
         ];
 
-        let selected = SelectionPolicy::HighestThroughput.select(&candidates).unwrap();
+        let selected = SelectionPolicy::HighestThroughput
+            .select(&candidates)
+            .unwrap();
         assert_eq!(selected.endpoint.network, OverlayId::Yggdrasil);
     }
 
     #[test]
     fn preferred_network_wins_when_both_paths_are_healthy() {
         let candidates = [
-            candidate(OverlayId::Cjdns, 1, RouteState::Reachable, Some(10), Some(0), Some(100)),
-            candidate(OverlayId::Yggdrasil, 2, RouteState::Reachable, Some(100), Some(0), Some(900)),
+            candidate(
+                OverlayId::Cjdns,
+                1,
+                RouteState::Reachable,
+                Some(10),
+                Some(0),
+                Some(100),
+            ),
+            candidate(
+                OverlayId::Yggdrasil,
+                2,
+                RouteState::Reachable,
+                Some(100),
+                Some(0),
+                Some(900),
+            ),
         ];
 
         let selected = SelectionPolicy::PreferNetwork(OverlayId::Yggdrasil)
@@ -189,17 +262,40 @@ mod tests {
     #[test]
     fn invalid_packet_loss_measurements_are_rejected() {
         let candidate = candidate(
-            OverlayId::Cjdns, 1, RouteState::Reachable, Some(1), Some(1_000_001), Some(1_000_000),
+            OverlayId::Cjdns,
+            1,
+            RouteState::Reachable,
+            Some(1),
+            Some(1_000_001),
+            Some(1_000_000),
         );
 
-        assert!(SelectionPolicy::LowestLatency.select(&[candidate]).is_none());
+        assert!(
+            SelectionPolicy::LowestLatency
+                .select(&[candidate])
+                .is_none()
+        );
     }
 
     #[test]
     fn missing_primary_measurements_rank_after_known_measurements() {
         let candidates = [
-            candidate(OverlayId::Cjdns, 1, RouteState::Reachable, None, Some(0), Some(1_000_000)),
-            candidate(OverlayId::Yggdrasil, 2, RouteState::Reachable, Some(500), None, None),
+            candidate(
+                OverlayId::Cjdns,
+                1,
+                RouteState::Reachable,
+                None,
+                Some(0),
+                Some(1_000_000),
+            ),
+            candidate(
+                OverlayId::Yggdrasil,
+                2,
+                RouteState::Reachable,
+                Some(500),
+                None,
+                None,
+            ),
         ];
 
         let selected = SelectionPolicy::LowestLatency.select(&candidates).unwrap();
