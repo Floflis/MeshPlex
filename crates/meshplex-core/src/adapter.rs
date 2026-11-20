@@ -1,15 +1,16 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
-use crate::{OverlayId, RouteCandidate};
+use crate::{OverlayId, OverlayRoute};
 
 /// A read-only view of one overlay adapter's latest observations.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OverlaySnapshot {
     pub network: OverlayId,
-    pub connected_peers: usize,
-    pub known_peers: usize,
-    pub routes: Vec<RouteCandidate>,
+    /// None means this adapter does not expose a trustworthy connected-peer count.
+    pub connected_peers: Option<usize>,
+    pub known_routes: usize,
+    pub routes: Vec<OverlayRoute>,
 }
 
 /// Error returned while collecting an overlay snapshot.
@@ -40,10 +41,9 @@ impl Error for AdapterError {}
 
 /// Read-only boundary between MeshPlex and an independently running overlay.
 ///
-/// Implementations may collect data from a supported admin API, a local daemon
-/// interface, or another documented source. The initial contract intentionally
-/// exposes observation only: it does not permit an adapter to rewrite routes,
-/// alter peers, or change daemon configuration.
+/// Implementations collect observations from a documented local/admin interface.
+/// The contract intentionally has no methods for changing peers, daemon settings,
+/// host routes, or packet forwarding state.
 pub trait OverlayAdapter: Send + Sync {
     fn snapshot(&self) -> Result<OverlaySnapshot, AdapterError>;
 }

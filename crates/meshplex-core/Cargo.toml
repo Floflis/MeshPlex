@@ -1,10 +1,10 @@
 [package]
 name = "meshplex-core"
-version = "0.1.0"
-description = "Protocol-neutral models and route selection for multiple overlay networks"
+version = "0.2.0"
+description = "Service identity, measurement freshness, and policy selection for overlay networks"
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 
-[lib]
-path = "src/lib.rs"
+[dependencies]
+sha2 = "0.10"
