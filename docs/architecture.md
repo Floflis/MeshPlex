@@ -2,65 +2,89 @@
 
 ## Goal
 
-MeshPlex coordinates endpoint choice across independent overlay networks. It is not a replacement routing protocol and does not combine their cryptographic identities or internal routing algorithms.
+MeshPlex coordinates service endpoint choice across independent overlay networks. It is not a replacement routing protocol and does not combine overlay cryptographic identities or internal routing algorithms.
 
-The initial integration targets are CJDNS and Yggdrasil. Other overlays may be added behind the same protocol-neutral boundary.
+The first integration targets are CJDNS and Yggdrasil. Other overlays may be added behind the same protocol-neutral boundary.
+
+## Service identity
+
+A service identity is derived from a canonical application public key:
+
+`SHA-256("meshplex/service-id/v1\\0" || u64be(key_length) || public_key)`
+
+The resulting 32-byte ServiceId is stable across overlays. It is deliberately not derived from a CJDNS public key, Yggdrasil public key, overlay IPv6 address, or peering session.
+
+A ServiceAdvertisement maps one ServiceId to explicitly advertised OverlayEndpoints. The same service can therefore publish a CJDNS endpoint and a Yggdrasil endpoint without implying that the two overlay nodes have the same identity.
+
+The current advertisement is an in-memory mapping, not a signed wire format. A matching ServiceId does not prove endpoint ownership. Signed advertisements, key rotation, revocation, and trust/discovery mechanisms remain future work.
 
 ## Control plane and data plane
 
 The project separates decisions from packet transport:
 
-- **Adapters** collect observations from an overlay implementation.
-- **Service discovery** maps a logical service identifier to the endpoints that the service explicitly advertises on each overlay.
-- **The selector** ranks eligible endpoints according to operator policy.
-- **System integration** is a later, optional component that applies a chosen endpoint through a local proxy or operating-system routing.
+- **Overlay adapters** collect route observations from independent daemons.
+- **Service advertisements** associate one application identity with explicitly published overlay endpoints.
+- **The join step** matches an advertised endpoint to a route observation on the same overlay and IP address.
+- **The selector** chooses among fresh candidates for the requested ServiceId.
+- **System integration** is a later, optional component that may apply a decision through a local proxy or operating-system routing.
 
-The first release is a library-level control-plane core. It does not manipulate the host routing table or carry user traffic.
+The current implementation is a library-level control plane. It does not manipulate the host routing table or carry user traffic.
 
-## Important distinction: two endpoints are not one route
+## Measurement freshness
 
-A service may publish one endpoint on CJDNS and another on Yggdrasil. MeshPlex can compare those paths only after it has evidence that both endpoints refer to the same service.
+Each RouteMetrics sample has an observed_at wall-clock timestamp set when the adapter collects it.
 
-The presence of an address on one overlay does not imply reachability through another overlay. Cross-overlay access requires the service to be present on both networks, or an explicitly configured gateway or proxy.
+Selection rejects a candidate when:
+- The timestamp is missing.
+- The timestamp is in the future relative to the selector.
+- The sample is older than the configured maximum age.
 
-## Adapter boundary
+The default maximum age is 30 seconds. Callers may use select_at with an explicit time and age limit for deterministic tests or a different policy.
 
-The initial OverlayAdapter contract is read-only and returns an OverlaySnapshot containing:
+This timestamp describes when the adapter observed the data, not necessarily when the underlying overlay last measured it. Adapters must not relabel old daemon metrics as newly measured values. Future versions may add per-field timestamps, monotonic durations, and stale-data policies.
 
-- The overlay identifier.
-- Connected and known peer counts.
-- Route candidates with endpoint, reachability state, and measurements.
+## Route state semantics
 
-Adapters must report the source and freshness of measurements in their future implementations. A missing measurement is unknown, not zero.
+- **Reachable:** an active end-to-end probe succeeded.
+- **Routed:** the overlay currently has a route to the destination; no end-to-end probe is implied.
+- **Degraded:** the adapter has evidence that the path is usable but degraded.
+- **Unreachable:** a check found the path unavailable.
+- **Unknown:** the adapter cannot establish the current state.
 
-The first adapters should use documented administrative or local interfaces. They should not parse unstable internal state or modify daemon configuration.
+Reachable ranks ahead of Routed, and Routed ahead of Degraded. Unknown and Unreachable are ineligible.
 
-## Selection rules
+## CJDNS adapter
 
-The initial policies are:
+The CJDNS adapter talks to the CJDNS Admin interface over UDP. It sends the read-only NodeStore_dumpTable request, decodes the bencoded response, and follows the paginated more indicator.
 
-- Lowest latency.
-- Highest throughput.
-- Lowest packet loss.
-- Prefer a configured overlay.
+For each routing-table entry it records:
+- The CJDNS IPv6 destination.
+- RouteState::Routed.
+- The NodeStore link value as path_quality.
+- The local collection time as observed_at.
 
-Only Reachable and Degraded candidates are eligible. Reachable candidates rank before Degraded candidates. Unknown and Unreachable candidates are excluded.
+The NodeStore link value is a unitless route-quality score, not RTT, bandwidth, or packet loss. NodeStore_dumpTable does not provide a reliable connected-peer count, so connected_peers is None rather than a fabricated zero.
 
-Missing measurements rank behind known measurements. Ties use deterministic secondary metrics and endpoint ordering so tests and operators can reproduce decisions.
+The adapter does not call RouterModule_pingNode, which is an authenticated operation. It does not change peers, interfaces, routes, or daemon settings. The default Admin endpoint is loopback UDP 127.0.0.1:11234; administrators should keep the privileged Admin interface tightly scoped.
 
-These rules are a starting point, not a claim that one metric captures application quality. Future policies may include jitter, cost, administrative constraints, service type, measurement age, and hysteresis.
+## Yggdrasil adapter plan
+
+The first adapter will target the official yggdrasil-go Admin JSON socket. The documented socket accepts newline-delimited JSON requests over local TCP or Unix-domain socket transports. Initial read-only requests will include getPeers and getSelf.
+
+The adapter API will remain protocol-neutral. A later native Rust backend can be evaluated using petrified and yggdrasil-mesh, while retaining the same MeshPlex service identity and selection model.
 
 ## Failover and connection continuity
 
 Selecting a different endpoint for a new connection is distinct from migrating an existing connection.
 
-The initial selector can return a new preferred endpoint when observations change. It does not preserve a TCP session, replay application data, or transparently migrate an established flow. Those capabilities would require a transport-aware proxy or a separately designed connection layer.
+The selector can return a new preferred endpoint when fresh observations change. It does not preserve a TCP session, replay application data, or transparently migrate an established flow. Those capabilities require a transport-aware proxy or a separately designed connection layer.
 
-Failover must also use fresh reachability data. A stale successful probe must not keep a dead route eligible indefinitely.
+Adaptive routing, hysteresis, failover, and load balancing remain future work. They must use fresh measurements and avoid route flapping.
 
 ## Security boundaries
 
 - Keep overlay keys, identities, and trust relationships separate.
+- Treat service advertisements as untrusted until a signature/trust mechanism exists.
 - Do not claim anonymity or concealment.
 - Do not enable forwarding between overlays by default.
 - Do not modify system routes until a dedicated, audited integration exists.
@@ -69,6 +93,6 @@ Failover must also use fresh reachability data. A stale successful probe must no
 
 ## Performance claims
 
-No performance improvement is claimed by the initial core. It only ranks already collected candidates and does not send packets.
+No performance improvement is claimed by the current core. It ranks collected candidates and the CJDNS adapter performs a local UDP Admin query; neither creates a multiplexed data path.
 
-Benchmarks must compare one overlay against multiple independently running overlays and then against any future multiplexed data path. Measurements should include CPU, resident memory, throughput, latency distributions, packet loss, convergence time, and energy use on constrained devices.
+Benchmarks must compare one overlay against multiple independently running overlays and then against any future multiplexed data path. Measure CPU, resident memory, throughput, latency distributions, packet loss, convergence time, and energy use on constrained devices.

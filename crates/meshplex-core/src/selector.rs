@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
+use std::time::{Duration, SystemTime};
 
-use crate::{OverlayId, RouteCandidate};
+use crate::{DEFAULT_MAX_MEASUREMENT_AGE, RouteCandidate, ServiceId};
 
 /// Explicit policy used to rank eligible service endpoints.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -11,25 +12,47 @@ pub enum SelectionPolicy {
     HighestThroughput,
     /// Prefer the lowest measured packet loss.
     LowestPacketLoss,
-    /// Prefer one overlay, then use latency and other metrics as tie-breakers.
-    PreferNetwork(OverlayId),
+    /// Prefer one overlay, then use other metrics as tie-breakers.
+    PreferNetwork(crate::OverlayId),
 }
 
 impl SelectionPolicy {
-    /// Selects the best eligible candidate, or None when no candidate is usable.
-    ///
-    /// Measurements that are absent are ranked behind known measurements.
-    /// Ties are resolved deterministically by endpoint identity.
-    pub fn select<'a>(&self, candidates: &'a [RouteCandidate]) -> Option<&'a RouteCandidate> {
+    /// Select the best fresh route for one service using the default 30-second age limit.
+    pub fn select<'a>(
+        &self,
+        service_id: &ServiceId,
+        candidates: &'a [RouteCandidate],
+    ) -> Option<&'a RouteCandidate> {
+        self.select_at(
+            service_id,
+            candidates,
+            SystemTime::now(),
+            DEFAULT_MAX_MEASUREMENT_AGE,
+        )
+    }
+
+    /// Select at an explicit time and freshness limit, which also makes the policy
+    /// deterministic and easy to test.
+    pub fn select_at<'a>(
+        &self,
+        service_id: &ServiceId,
+        candidates: &'a [RouteCandidate],
+        now: SystemTime,
+        max_measurement_age: Duration,
+    ) -> Option<&'a RouteCandidate> {
         candidates
             .iter()
-            .filter(|candidate| candidate.is_eligible())
+            .filter(|candidate| candidate.service_id == *service_id)
+            .filter(|candidate| candidate.state.is_eligible())
+            .filter(|candidate| candidate.metrics.is_valid())
+            .filter(|candidate| candidate.metrics.is_fresh_at(now, max_measurement_age))
             .min_by(|left, right| self.compare(left, right))
     }
 
     fn compare(&self, left: &RouteCandidate, right: &RouteCandidate) -> Ordering {
         left.state
-            .cmp(&right.state)
+            .preference()
+            .cmp(&right.state.preference())
             .then_with(|| self.compare_primary(left, right))
             .then_with(|| {
                 compare_optional_ascending(
@@ -47,6 +70,12 @@ impl SelectionPolicy {
                 compare_optional_descending(
                     left.metrics.throughput_bps.as_ref(),
                     right.metrics.throughput_bps.as_ref(),
+                )
+            })
+            .then_with(|| {
+                compare_optional_descending(
+                    left.metrics.path_quality.as_ref(),
+                    right.metrics.path_quality.as_ref(),
                 )
             })
             .then_with(|| {
@@ -97,21 +126,33 @@ fn compare_optional_descending<T: Ord>(left: Option<&T>, right: Option<&T>) -> O
 #[cfg(test)]
 mod tests {
     use std::net::{IpAddr, Ipv6Addr};
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
 
     use crate::{
         OverlayEndpoint, OverlayId, RouteCandidate, RouteMetrics, RouteState, SelectionPolicy,
+        ServiceId,
     };
 
-    fn candidate(
-        network: OverlayId,
-        last_segment: u16,
-        state: RouteState,
+    struct Sample {
         latency_ms: Option<u64>,
         packet_loss_ppm: Option<u32>,
         throughput_bps: Option<u64>,
+        observed_at: Option<SystemTime>,
+    }
+
+    fn service_id(key: &[u8]) -> ServiceId {
+        ServiceId::from_public_key(key).unwrap()
+    }
+
+    fn candidate(
+        service: ServiceId,
+        network: OverlayId,
+        last_segment: u16,
+        state: RouteState,
+        sample: Sample,
     ) -> RouteCandidate {
         RouteCandidate {
+            service_id: service,
             endpoint: OverlayEndpoint {
                 network,
                 address: IpAddr::V6(Ipv6Addr::new(0x200, 0, 0, 0, 0, 0, 0, last_segment)),
@@ -119,186 +160,187 @@ mod tests {
             },
             state,
             metrics: RouteMetrics {
-                round_trip_time: latency_ms.map(Duration::from_millis),
+                round_trip_time: sample.latency_ms.map(Duration::from_millis),
                 jitter: None,
-                packet_loss_ppm,
-                throughput_bps,
+                packet_loss_ppm: sample.packet_loss_ppm,
+                throughput_bps: sample.throughput_bps,
+                path_quality: None,
+                observed_at: sample.observed_at,
             },
         }
     }
 
+    fn sample(
+        latency_ms: Option<u64>,
+        packet_loss_ppm: Option<u32>,
+        throughput_bps: Option<u64>,
+        observed_at: Option<SystemTime>,
+    ) -> Sample {
+        Sample {
+            latency_ms,
+            packet_loss_ppm,
+            throughput_bps,
+            observed_at,
+        }
+    }
+
     #[test]
-    fn lowest_latency_selects_the_fastest_eligible_path() {
+    fn lowest_latency_selects_the_fastest_fresh_route_for_the_service() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10_000);
+        let service = service_id(b"service A");
         let candidates = [
             candidate(
+                service,
                 OverlayId::Yggdrasil,
                 2,
                 RouteState::Reachable,
-                Some(40),
-                Some(1_000),
-                Some(10_000),
+                sample(Some(40), Some(1_000), Some(10_000), Some(now)),
             ),
             candidate(
+                service,
                 OverlayId::Cjdns,
                 1,
                 RouteState::Reachable,
-                Some(20),
-                Some(2_000),
-                Some(8_000),
+                sample(Some(20), Some(2_000), Some(8_000), Some(now)),
             ),
         ];
 
-        let selected = SelectionPolicy::LowestLatency.select(&candidates).unwrap();
+        let selected = SelectionPolicy::LowestLatency
+            .select_at(&service, &candidates, now, Duration::from_secs(30))
+            .unwrap();
         assert_eq!(selected.endpoint.network, OverlayId::Cjdns);
-        assert_eq!(
-            selected.metrics.round_trip_time,
-            Some(Duration::from_millis(20))
+    }
+
+    #[test]
+    fn candidate_for_another_service_is_never_selected() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10_000);
+        let requested = service_id(b"requested");
+        let other = service_id(b"other");
+        let candidate = candidate(
+            other,
+            OverlayId::Cjdns,
+            1,
+            RouteState::Reachable,
+            sample(Some(1), Some(0), Some(1_000_000), Some(now)),
+        );
+
+        assert!(
+            SelectionPolicy::LowestLatency
+                .select_at(&requested, &[candidate], now, Duration::from_secs(30))
+                .is_none()
         );
     }
 
     #[test]
-    fn unknown_and_unreachable_paths_are_excluded() {
-        let candidates = [
-            candidate(
-                OverlayId::Cjdns,
-                1,
-                RouteState::Unreachable,
+    fn stale_measurements_are_not_eligible() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10_000);
+        let service = service_id(b"stale service");
+        let candidate = candidate(
+            service,
+            OverlayId::Cjdns,
+            1,
+            RouteState::Reachable,
+            sample(
                 Some(1),
                 Some(0),
                 Some(1_000_000),
+                Some(now - Duration::from_secs(31)),
             ),
-            candidate(
-                OverlayId::Yggdrasil,
-                2,
-                RouteState::Unknown,
-                Some(2),
-                Some(0),
-                Some(1_000_000),
-            ),
-        ];
+        );
 
-        assert!(SelectionPolicy::LowestLatency.select(&candidates).is_none());
+        assert!(
+            SelectionPolicy::LowestLatency
+                .select_at(&service, &[candidate], now, Duration::from_secs(30))
+                .is_none()
+        );
     }
 
     #[test]
-    fn reachable_path_ranks_before_degraded_even_when_slower() {
-        let candidates = [
-            candidate(
-                OverlayId::Cjdns,
-                1,
-                RouteState::Degraded,
+    fn future_timestamps_are_rejected() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10_000);
+        let service = service_id(b"future service");
+        let candidate = candidate(
+            service,
+            OverlayId::Cjdns,
+            1,
+            RouteState::Reachable,
+            sample(
                 Some(1),
                 Some(0),
                 Some(1_000_000),
+                Some(now + Duration::from_secs(1)),
             ),
-            candidate(
-                OverlayId::Yggdrasil,
-                2,
-                RouteState::Reachable,
-                Some(100),
-                Some(10_000),
-                Some(100_000),
-            ),
-        ];
+        );
 
-        let selected = SelectionPolicy::LowestLatency.select(&candidates).unwrap();
-        assert_eq!(selected.endpoint.network, OverlayId::Yggdrasil);
+        assert!(
+            SelectionPolicy::LowestLatency
+                .select_at(&service, &[candidate], now, Duration::from_secs(30))
+                .is_none()
+        );
     }
 
     #[test]
-    fn highest_throughput_prefers_the_largest_known_measurement() {
-        let candidates = [
-            candidate(
-                OverlayId::Cjdns,
-                1,
-                RouteState::Reachable,
-                Some(10),
-                Some(0),
-                Some(100),
-            ),
-            candidate(
-                OverlayId::Yggdrasil,
-                2,
-                RouteState::Reachable,
-                Some(50),
-                Some(0),
-                Some(900),
-            ),
-        ];
+    fn missing_measurement_timestamp_is_rejected() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10_000);
+        let service = service_id(b"missing timestamp");
+        let candidate = candidate(
+            service,
+            OverlayId::Cjdns,
+            1,
+            RouteState::Reachable,
+            sample(Some(1), Some(0), Some(1_000_000), None),
+        );
 
-        let selected = SelectionPolicy::HighestThroughput
-            .select(&candidates)
-            .unwrap();
-        assert_eq!(selected.endpoint.network, OverlayId::Yggdrasil);
+        assert!(
+            SelectionPolicy::LowestLatency
+                .select_at(&service, &[candidate], now, Duration::from_secs(30))
+                .is_none()
+        );
     }
 
     #[test]
-    fn preferred_network_wins_when_both_paths_are_healthy() {
+    fn reachable_path_ranks_before_routed_even_when_routed_is_faster() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10_000);
+        let service = service_id(b"route states");
         let candidates = [
             candidate(
+                service,
                 OverlayId::Cjdns,
                 1,
-                RouteState::Reachable,
-                Some(10),
-                Some(0),
-                Some(100),
+                RouteState::Routed,
+                sample(Some(1), Some(0), Some(1_000_000), Some(now)),
             ),
             candidate(
+                service,
                 OverlayId::Yggdrasil,
                 2,
                 RouteState::Reachable,
-                Some(100),
-                Some(0),
-                Some(900),
+                sample(Some(100), Some(10_000), Some(100_000), Some(now)),
             ),
         ];
 
-        let selected = SelectionPolicy::PreferNetwork(OverlayId::Yggdrasil)
-            .select(&candidates)
+        let selected = SelectionPolicy::LowestLatency
+            .select_at(&service, &candidates, now, Duration::from_secs(30))
             .unwrap();
         assert_eq!(selected.endpoint.network, OverlayId::Yggdrasil);
     }
 
     #[test]
     fn invalid_packet_loss_measurements_are_rejected() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10_000);
+        let service = service_id(b"invalid");
         let candidate = candidate(
+            service,
             OverlayId::Cjdns,
             1,
             RouteState::Reachable,
-            Some(1),
-            Some(1_000_001),
-            Some(1_000_000),
+            sample(Some(1), Some(1_000_001), Some(1_000_000), Some(now)),
         );
 
         assert!(
             SelectionPolicy::LowestLatency
-                .select(&[candidate])
+                .select_at(&service, &[candidate], now, Duration::from_secs(30))
                 .is_none()
         );
-    }
-
-    #[test]
-    fn missing_primary_measurements_rank_after_known_measurements() {
-        let candidates = [
-            candidate(
-                OverlayId::Cjdns,
-                1,
-                RouteState::Reachable,
-                None,
-                Some(0),
-                Some(1_000_000),
-            ),
-            candidate(
-                OverlayId::Yggdrasil,
-                2,
-                RouteState::Reachable,
-                Some(500),
-                None,
-                None,
-            ),
-        ];
-
-        let selected = SelectionPolicy::LowestLatency.select(&candidates).unwrap();
-        assert_eq!(selected.endpoint.network, OverlayId::Yggdrasil);
     }
 }

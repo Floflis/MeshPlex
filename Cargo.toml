@@ -1,8 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["crates/meshplex-core"]
+members = [
+    "crates/meshplex-core",
+    "crates/meshplex-cjdns",
+]
 
 [workspace.package]
 edition = "2024"
 rust-version = "1.85"
-repository = "https://github.com/Floflis/MeshiPlexer"
+repository = "https://github.com/Floflis/MeshPlex"

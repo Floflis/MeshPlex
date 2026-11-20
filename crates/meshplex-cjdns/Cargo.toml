@@ -1,0 +1,10 @@
+[package]
+name = "meshplex-cjdns"
+version = "0.1.0"
+description = "Read-only CJDNS Admin API adapter for MeshPlex"
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+meshplex-core = { path = "../meshplex-core" }
