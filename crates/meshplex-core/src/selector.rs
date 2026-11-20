@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::time::{Duration, SystemTime};
 
-use crate::{RouteCandidate, ServiceId, DEFAULT_MAX_MEASUREMENT_AGE};
+use crate::{DEFAULT_MAX_MEASUREMENT_AGE, RouteCandidate, ServiceId};
 
 /// Explicit policy used to rank eligible service endpoints.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -215,9 +215,11 @@ mod tests {
             Some(now),
         );
 
-        assert!(SelectionPolicy::LowestLatency
-            .select_at(&requested, &[candidate], now, Duration::from_secs(30))
-            .is_none());
+        assert!(
+            SelectionPolicy::LowestLatency
+                .select_at(&requested, &[candidate], now, Duration::from_secs(30))
+                .is_none()
+        );
     }
 
     #[test]
@@ -235,9 +237,11 @@ mod tests {
             Some(now - Duration::from_secs(31)),
         );
 
-        assert!(SelectionPolicy::LowestLatency
-            .select_at(&service, &[candidate], now, Duration::from_secs(30))
-            .is_none());
+        assert!(
+            SelectionPolicy::LowestLatency
+                .select_at(&service, &[candidate], now, Duration::from_secs(30))
+                .is_none()
+        );
     }
 
     #[test]
@@ -255,9 +259,11 @@ mod tests {
             Some(now + Duration::from_secs(1)),
         );
 
-        assert!(SelectionPolicy::LowestLatency
-            .select_at(&service, &[candidate], now, Duration::from_secs(30))
-            .is_none());
+        assert!(
+            SelectionPolicy::LowestLatency
+                .select_at(&service, &[candidate], now, Duration::from_secs(30))
+                .is_none()
+        );
     }
 
     #[test]
@@ -275,9 +281,11 @@ mod tests {
             None,
         );
 
-        assert!(SelectionPolicy::LowestLatency
-            .select_at(&service, &[candidate], now, Duration::from_secs(30))
-            .is_none());
+        assert!(
+            SelectionPolicy::LowestLatency
+                .select_at(&service, &[candidate], now, Duration::from_secs(30))
+                .is_none()
+        );
     }
 
     #[test]
@@ -328,8 +336,10 @@ mod tests {
             Some(now),
         );
 
-        assert!(SelectionPolicy::LowestLatency
-            .select_at(&service, &[candidate], now, Duration::from_secs(30))
-            .is_none());
+        assert!(
+            SelectionPolicy::LowestLatency
+                .select_at(&service, &[candidate], now, Duration::from_secs(30))
+                .is_none()
+        );
     }
 }
