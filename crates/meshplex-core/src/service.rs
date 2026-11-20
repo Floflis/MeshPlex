@@ -1,9 +1,7 @@
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
 
-use crate::{
-    OverlayEndpoint, OverlaySnapshot, RouteCandidate, ServiceId, ServiceIdentityError,
-};
+use crate::{OverlayEndpoint, OverlaySnapshot, RouteCandidate, ServiceId, ServiceIdentityError};
 
 /// A service identity and the endpoints it explicitly advertises on independent overlays.
 ///
@@ -89,8 +87,12 @@ impl Display for ServiceAdvertisementError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Identity(error) => Display::fmt(error, formatter),
-            Self::NoEndpoints => formatter.write_str("a service must advertise at least one endpoint"),
-            Self::DuplicateEndpoint => formatter.write_str("service advertisement contains a duplicate endpoint"),
+            Self::NoEndpoints => {
+                formatter.write_str("a service must advertise at least one endpoint")
+            }
+            Self::DuplicateEndpoint => {
+                formatter.write_str("service advertisement contains a duplicate endpoint")
+            }
         }
     }
 }
@@ -160,18 +162,17 @@ mod tests {
 
         let candidates = advertisement.route_candidates(&snapshots);
         assert_eq!(candidates.len(), 2);
-        assert!(candidates
-            .iter()
-            .all(|candidate| candidate.service_id == advertisement.service_id));
+        assert!(
+            candidates
+                .iter()
+                .all(|candidate| candidate.service_id == advertisement.service_id)
+        );
     }
 
     #[test]
     fn advertisement_does_not_join_an_endpoint_from_the_wrong_overlay() {
-        let advertisement = ServiceAdvertisement::new(
-            b"service key",
-            vec![endpoint(OverlayId::Cjdns, 7)],
-        )
-        .unwrap();
+        let advertisement =
+            ServiceAdvertisement::new(b"service key", vec![endpoint(OverlayId::Cjdns, 7)]).unwrap();
 
         let snapshots = [OverlaySnapshot {
             network: OverlayId::Yggdrasil,
