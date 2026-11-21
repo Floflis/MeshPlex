@@ -1,0 +1,65 @@
+name: Multi-architecture checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: multiarch-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Workspace check (${{ matrix.target }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - armv7-unknown-linux-gnueabihf
+          - riscv64gc-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: meshplex-${{ matrix.target }}
+      - name: Check workspace for target
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo check --workspace --target "$TARGET"
+
+  redox-target-inventory:
+    name: Redox target availability (informational)
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Report Redox target support level
+        shell: bash
+        run: |
+          set +e
+          for target in x86_64-unknown-redox aarch64-unknown-redox i586-unknown-redox riscv64gc-unknown-redox; do
+            echo "::group::$target"
+            rustc --print target-list | grep -Fx "$target"
+            rustup target add "$target"
+            status=$?
+            if [ "$status" -eq 0 ]; then
+              echo "$target: prebuilt target component installed"
+            else
+              echo "$target: no stable prebuilt component; custom Tier 3 toolchain/Redox sysroot required"
+            fi
+            echo "::endgroup::"
+          done
