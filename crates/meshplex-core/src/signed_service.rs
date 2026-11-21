@@ -78,11 +78,9 @@ impl SignedServiceAdvertisement {
         if self.expires_at <= self.issued_at {
             return Err(SignedAdvertisementError::InvalidValidityWindow);
         }
-        if self.issued_at > now.saturating_add(skew) {
+        // Accept a small future-issued timestamp only within the caller's skew allowance.
+        if self.issued_at.saturating_sub(now) > skew {
             return Err(SignedAdvertisementError::ClockSkew);
-        }
-        if now < self.issued_at {
-            return Err(SignedAdvertisementError::NotYetValid);
         }
         if now >= self.expires_at {
             return Err(SignedAdvertisementError::Expired);
@@ -133,7 +131,9 @@ fn sort_key(e: &OverlayEndpoint) -> Vec<u8> {
         OverlayId::Yggdrasil => k.push(1),
         OverlayId::Other(s) => {
             k.push(2);
-            k.extend(s.as_bytes())
+            let len = u16::try_from(s.len()).unwrap_or(u16::MAX);
+            k.extend(len.to_be_bytes());
+            k.extend(s.as_bytes());
         }
     }
     match e.address {
@@ -201,10 +201,8 @@ mod tests {
         let a = SignedServiceAdvertisement::sign(&k, vec![ep()], 100, 200).unwrap();
         assert_eq!(a.verify_at(150, 5), Ok(()));
         assert_eq!(a.verify_at(200, 5), Err(SignedAdvertisementError::Expired));
-        assert_eq!(
-            a.verify_at(90, 5),
-            Err(SignedAdvertisementError::NotYetValid)
-        )
+        assert_eq!(a.verify_at(90, 5), Err(SignedAdvertisementError::ClockSkew));
+        assert_eq!(a.verify_at(98, 5), Ok(()));
     }
     #[test]
     fn tampering_rejected() {
@@ -229,6 +227,24 @@ mod tests {
         let b = SignedServiceAdvertisement::sign(&k, vec![y, x], 1, 10).unwrap();
         assert_eq!(a.signature, b.signature)
     }
+    #[test]
+    fn other_network_names_are_canonicalized_with_length_prefix() {
+        let key = SigningKey::from_bytes(&[5; 32]);
+        let a = OverlayEndpoint {
+            network: OverlayId::Other("mesh-a".into()),
+            address: IpAddr::V6(Ipv6Addr::LOCALHOST),
+            port: Some(10),
+        };
+        let b = OverlayEndpoint {
+            network: OverlayId::Other("mesh-a-long".into()),
+            address: IpAddr::V6(Ipv6Addr::LOCALHOST),
+            port: Some(20),
+        };
+        let first = SignedServiceAdvertisement::sign(&key, vec![a.clone(), b.clone()], 1, 10).unwrap();
+        let reversed = SignedServiceAdvertisement::sign(&key, vec![b, a], 1, 10).unwrap();
+        assert_eq!(first.signature, reversed.signature);
+    }
+
     #[test]
     fn rejects_empty_and_duplicate() {
         let k = SigningKey::from_bytes(&[1; 32]);
