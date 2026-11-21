@@ -8,7 +8,7 @@ MeshPlex observes CJDNS and Yggdrasil, binds explicit endpoints to application s
 
 ## Capabilities
 - ServiceId derived from canonical public key bytes.
-- SignedServiceAdvertisement: Ed25519 signature, deterministic endpoint encoding, issued/expiry timestamps.
+- SignedServiceAdvertisement: Ed25519 signature, deterministic encoding, timestamps, bounded binary export/import v1.
 - Freshness filtering (30-second default) and route-selection policies.
 - Read-only CJDNS NodeStore and Yggdrasil Admin adapters (Go, yggdrasil-rs, Yggdrasil-ng).
 
@@ -27,6 +27,9 @@ Daemon supervision, overlay protocol implementation, discovery/trust lifecycle, 
 - Windows builds/exports.
 - Termux on Android, with the Galaxy S20 FE as a target device.
 - ARMv7, armhf, and RISC-V.
+- RedoxOS and BSD family: FreeBSD, NetBSD, OpenBSD, DragonFly BSD.
+
+CI cross-target checks do not imply native runtime validation or release packaging.
 
 Build/packaging and runtime validation will be tracked separately for each target.
 

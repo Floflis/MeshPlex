@@ -12,7 +12,8 @@
 ## Service identity/discovery
 - [ ] Trust policy, key rotation, revocation, ownership semantics.
 - [ ] Overlay-neutral advertisement distribution/discovery.
-- [ ] Multi-algorithm key types and stable external serialization/versioning.
+- [x] Bounded binary wire envelope v1 with encode/decode and parser tests.
+- [ ] Multi-algorithm key types and wire-format evolution/versioning.
 
 ## Measurements and policy
 - [ ] Per-metric timestamps, monotonic freshness, hysteresis, route-flap protection.
