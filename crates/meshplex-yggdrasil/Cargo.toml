@@ -1,0 +1,11 @@
+[package]
+name = "meshplex-yggdrasil"
+version = "0.1.0"
+description = "Read-only adapters for Yggdrasil Go and Rust implementations"
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+meshplex-core = { path = "../meshplex-core" }
+serde_json = "1.0"

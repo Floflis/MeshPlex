@@ -11,7 +11,12 @@
 - [x] Add deterministic selection policies for latency, throughput, packet loss, and preferred overlay.
 - [x] Implement a read-only CJDNS Admin UDP adapter using paginated NodeStore_dumpTable.
 - [x] Keep CJDNS route-table quality separate from RTT and peer-count metrics.
-- [x] Add unit tests and CI checks for formatting, Clippy, and workspace tests.
+- [x] Implement a read-only Yggdrasil adapter for the official Go daemon.
+- [x] Implement a read-only Yggdrasil adapter for yggdrasil-rs, which uses petrified.
+- [x] Implement a read-only Yggdrasil adapter for Yggdrasil-ng.
+- [x] Normalize Yggdrasil peer observations into Routed IPv6 peer routes.
+- [x] Preserve backend-specific RTT units and leave unavailable metrics unknown.
+- [x] Add adapter unit tests and CI checks for formatting, Clippy, and workspace tests.
 
 ## Service identity and discovery
 
@@ -28,12 +33,12 @@
 - [ ] Add policy options for jitter, cost, administrative preference, and service type.
 - [ ] Add adapter conformance tests and stale-data integration tests.
 - [ ] Add optional authenticated CJDNS active probes; keep them disabled unless explicitly configured.
+- [ ] Add optional Yggdrasil active probes only after defining their authentication, permission, and safety model.
 
 ## Overlay integrations
 
-- [ ] Implement a read-only Yggdrasil adapter using the official yggdrasil-go Admin JSON socket first.
-- [ ] Test the Go adapter against documented getPeers and getSelf response formats.
-- [ ] Later evaluate a native Rust backend using petrified and yggdrasil-mesh without changing the adapter contract.
+- [ ] Test all Yggdrasil adapters against live Go, yggdrasil-rs, and Yggdrasil-ng daemons.
+- [ ] Extend Yggdrasil observations to additional routing-table data only where route semantics are comparable.
 - [ ] Document daemon versions tested for every adapter.
 - [ ] Keep protocol-specific crates and licenses independent; do not copy code without review.
 

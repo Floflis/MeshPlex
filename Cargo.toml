@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/meshplex-core",
     "crates/meshplex-cjdns",
+    "crates/meshplex-yggdrasil",
 ]
 
 [workspace.package]
