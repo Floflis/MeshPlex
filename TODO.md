@@ -35,3 +35,11 @@
 - [ ] Reproducible single/dual-overlay benchmarks and CPU/memory/throughput/latency/jitter/loss/convergence/energy metrics.
 - [ ] Peer churn, stale data, daemon restart, partial failures, constrained devices.
 - [ ] Select repository license before release.
+
+## Release targets and portability
+- [ ] Windows builds/exports (native Windows targets).
+- [ ] Termux on Android, specifically Galaxy S20 FE (Exynos 4G SM-G780F).
+- [ ] ARMv7 targets.
+- [ ] armhf (32-bit ARM hard-float).
+- [ ] RISC-V targets.
+- [ ] Establish CI build matrix, packaging, and smoke tests for each target; distinguish build support from tested runtime support.

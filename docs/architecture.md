@@ -18,5 +18,8 @@ Reachable: successful end-to-end probe. Routed: overlay route/session only. Degr
 CJDNS reads paginated NodeStore_dumpTable via local UDP and stores destination, Routed, link score, and collection timestamp. No invented RTT/peer count.
 Yggdrasil Go, yggdrasil-rs (complete node using petrified), and Yggdrasil-ng adapters use read-only getSelf/getPeers. Direct peers are Routed; RTT retained only when supplied. No fabricated loss, throughput, or application reachability. Admin sockets must remain local/restricted.
 
+## Portability and release targets
+Planned: Windows builds/exports; Termux on Android (Galaxy S20 FE); ARMv7; armhf; and RISC-V. The roadmap distinguishes compile/build availability from packaging and runtime testing on actual devices.
+
 ## Future work
 Trust/key lifecycle, overlay-neutral discovery, serialization/versioning, live-daemon tests, richer measurements, adaptive routing/failover, proxy/OS integration, connection migration, gateway forwarding, and benchmarks.

@@ -22,6 +22,14 @@ Daemon supervision, overlay protocol implementation, discovery/trust lifecycle, 
 - `meshplex-cjdns`: read-only CJDNS adapter.
 - `meshplex-yggdrasil`: read-only adapters for three implementations.
 
+## Planned release targets
+
+- Windows builds/exports.
+- Termux on Android, with the Galaxy S20 FE as a target device.
+- ARMv7, armhf, and RISC-V.
+
+Build/packaging and runtime validation will be tracked separately for each target.
+
 ## Checks
 Rust 1.85+: `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`; `cargo test --workspace`.
 See `docs/architecture.md` for boundaries and limitations.
