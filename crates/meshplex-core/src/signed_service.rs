@@ -240,7 +240,8 @@ mod tests {
             address: IpAddr::V6(Ipv6Addr::LOCALHOST),
             port: Some(20),
         };
-        let first = SignedServiceAdvertisement::sign(&key, vec![a.clone(), b.clone()], 1, 10).unwrap();
+        let first =
+            SignedServiceAdvertisement::sign(&key, vec![a.clone(), b.clone()], 1, 10).unwrap();
         let reversed = SignedServiceAdvertisement::sign(&key, vec![b, a], 1, 10).unwrap();
         assert_eq!(first.signature, reversed.signature);
     }
