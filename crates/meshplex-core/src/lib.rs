@@ -3,6 +3,7 @@ mod adapter;
 mod model;
 mod selector;
 mod service;
+mod wire;
 mod signed_service;
 pub use adapter::{AdapterError, OverlayAdapter, OverlaySnapshot};
 pub use model::{
@@ -11,4 +12,5 @@ pub use model::{
 };
 pub use selector::SelectionPolicy;
 pub use service::{ServiceAdvertisement, ServiceAdvertisementError};
+pub use wire::AdvertisementWireError;
 pub use signed_service::{SignedAdvertisementError, SignedServiceAdvertisement};
